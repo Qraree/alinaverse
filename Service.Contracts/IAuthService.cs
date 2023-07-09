@@ -1,6 +1,10 @@
-﻿namespace Service.Contracts;
+﻿using Shared.DataTransferObjects;
+
+namespace Service.Contracts;
 
 public interface IAuthService
 {
-    string CreateToken();
+    UserDto RegisterUser(UserForRegistrationDto userForRegistration);
+    bool ValidateUser(UserForAuthenticationServiceDto userForAuth);
+    TokenDto CreateToken();
 }

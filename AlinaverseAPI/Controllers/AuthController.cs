@@ -8,19 +8,25 @@ namespace AlinaverseAPI.Controllers;
 [Route("[controller]")]
 public class AuthController : ControllerBase
 {
-    private readonly IUserService _userService;
     private readonly IAuthService _authService;
 
-    public AuthController(IUserService userService, IAuthService authService)
+    public AuthController(IAuthService authService)
     {
-        _userService = userService;
         _authService = authService;
     }
 
     [HttpPost("register")]
-    public IActionResult RegisterUser(UserForCreationDto user)
+    public IActionResult RegisterUser(UserForRegistrationDto user)
     {
-        var createdUser = _userService.AddUser(user);
-        return Ok(new { User = createdUser, Token = _authService.CreateToken()});
+        var createdUser = _authService.RegisterUser(user);
+        return Ok(new {User = createdUser, Token = _authService.CreateToken()});
+    }
+
+    [HttpPost("login")]
+    public IActionResult Login(UserForAuthenticationServiceDto user)
+    {
+        if (!_authService.ValidateUser(user))
+            return Unauthorized();
+        return Ok(new {Token = _authService.CreateToken()});
     }
 }
