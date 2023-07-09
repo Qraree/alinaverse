@@ -1,6 +1,6 @@
 version: '3'
 
-services: 
+services:
   backend:
     image: alinaverse-backend
     build:
@@ -8,12 +8,12 @@ services:
       dockerfile: AlinaverseAPI/Dockerfile
     ports:
       - "80:80"
-    depends_on: 
+    depends_on:
       - postgres
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - ASPNETCORE_URLS=http://+:80
-    
+
   postgres:
     image: postgres
     environment:
@@ -22,3 +22,14 @@ services:
       - "5444:5432"
     volumes:
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  pgadmin:
+    image: dpage/pgadmin4
+    depends_on:
+      - postgres
+    ports:
+      - "5555:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: pgadmin4@pgadmin.org
+      PGADMIN_DEFAULT_PASSWORD: admin
+
