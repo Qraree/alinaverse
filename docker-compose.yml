@@ -11,8 +11,15 @@ services:
     depends_on: 
       - postgres
     environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:80
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:80
+      JwtSettings__SecretKey: "3ZcRUst4DM9M24kree5uupQyLmL6pRARw7xxuPAtH"
+      JwtSettings__LifeSpan: 30
+      JwtSettings__RefreshTokenLifeSpan: 30
+      JwtSettings__ValidIssuer: "Alinaverse"
+      JwtSettings__ValidAudience: "http://localhost:80"
+      ConnectionStrings__PostgreSQL: Host=postgres;Port=5432;Username=postgres;Password=root;Database=alinaverse;
+      
     
   postgres:
     image: postgres
