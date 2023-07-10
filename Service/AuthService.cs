@@ -71,7 +71,7 @@ public class AuthService : IAuthService
         return new UserDto(userId, userForRegistration.Name, userForRegistration.Email);
     }
 
-    public bool ValidateUser(UserForAuthenticationServiceDto userForAuth)
+    public bool ValidateUser(UserForAuthenticationDto userForAuth)
     {
         _user = _userRepository.FindUserByEmail(userForAuth.Email);
         if (this._user is null)
@@ -88,10 +88,79 @@ public class AuthService : IAuthService
         var tokenOptions = GenerateTokenOptions(signInCred, claims);
 
         var refreshToken = GenerateRefreshToken();
-        _tokenRepository.SetUpRefreshToken(_user.Id, refreshToken, DateTime.Now.AddDays(7));
+
+        var newToken = new Token()
+        {
+            UserId = _user.Id,
+            RefreshToken = refreshToken,
+            ExpiryTime = DateTime.Now.AddDays(7)
+        };
+        
+        _tokenRepository.SetUpRefreshToken(newToken);
         
         var accessToken = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
         return new TokenDto(accessToken, refreshToken);
+    }
+
+    public TokenDto RefreshToken(TokenDto tokenDto)
+    {
+        var principal = GetPrincipalFromExpiredToken(tokenDto.AccessToken);
+
+        var user = _userRepository.FindUserByEmail(principal.FindFirst(ClaimTypes.Email).Value);
+        if (user == null)
+            throw new RefreshTokenBadRequest();
+
+        var refreshToken = _tokenRepository.GetRefreshToken(user.Id, tokenDto.RefreshToken);
+        if (refreshToken == null || refreshToken.ExpiryTime <= DateTime.Now)
+            throw new RefreshTokenBadRequest();
+        
+        _tokenRepository.DeleteRefreshToken(refreshToken.Id);
+        
+        _user = user;
+        
+        return CreateToken();
+    }
+
+    public void LogOut(TokenDto tokenDto)
+    {
+        var principal = GetPrincipalFromExpiredToken(tokenDto.AccessToken);
+
+        var user = _userRepository.FindUserByEmail(principal.FindFirst(ClaimTypes.Email).Value);
+        if (user == null)
+            throw new RefreshTokenBadRequest();
+
+        var refreshToken = _tokenRepository.GetRefreshToken(user.Id, tokenDto.RefreshToken);
+        if (refreshToken == null || refreshToken.ExpiryTime <= DateTime.Now)
+            throw new RefreshTokenBadRequest();
+        
+        _tokenRepository.DeleteRefreshToken(refreshToken.Id);
+    }
+
+    private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
+    {
+        var tokenValidationParameters = new TokenValidationParameters()
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = "Alinaverse",
+            ValidAudience = "https://localhost:7023",
+            IssuerSigningKey =
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes("3ZcRUst4DM9M24kree5uupQyLmL6pRARw7xxuPAtH"))
+        };
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        SecurityToken securityToken;
+        var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out securityToken);
+        var jwtSecurityToken = securityToken as JwtSecurityToken;
+        if (jwtSecurityToken == null ||
+            !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256Signature,
+                StringComparison.InvariantCultureIgnoreCase))
+        {
+            throw new SecurityTokenException("Invalid token");
+        }
+
+        return principal;
     }
 
     private JwtSecurityToken GenerateTokenOptions(SigningCredentials signingCredentials, List<Claim> claims)
@@ -101,7 +170,7 @@ public class AuthService : IAuthService
             issuer: "Alinaverse",
             audience: "https://localhost:7023",
             claims: claims,
-            expires: DateTime.Now.AddMinutes(30),
+            expires: DateTime.Now.AddMinutes(1),
             signingCredentials: signingCredentials
         );
         return tokenOptions;
