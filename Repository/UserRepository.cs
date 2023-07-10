@@ -23,7 +23,8 @@ public class UserRepository : RepositoryBase, IUserRepository
         using (IDbConnection dbConnection = Connection)
         {
             dbConnection.Open();
-            return dbConnection.Query<User>("SELECT * FROM users WHERE id = @Id", new {Id = id}).FirstOrDefault();
+            return dbConnection.Query<User>(
+                "SELECT * FROM users WHERE id = @Id", new {Id = id}).FirstOrDefault();
         }
     }
 
@@ -32,8 +33,18 @@ public class UserRepository : RepositoryBase, IUserRepository
         using (IDbConnection dbConnection = Connection)
         {
             dbConnection.Open();
-            return dbConnection.ExecuteScalar<int>("INSERT INTO users (name, password) VALUES (@Name, @Password)" +
-                                            "RETURNING id", entity);
+            return dbConnection.ExecuteScalar<int>(
+                "INSERT INTO users (name, password, email) VALUES (@Name, @Password, @Email) RETURNING id", entity);
+        }
+    }
+
+    public User FindUserByEmail(string email)
+    {
+        using (IDbConnection dbConnection = Connection)
+        {
+            dbConnection.Open();
+            return dbConnection.Query<User>("SELECT * FROM users WHERE email = @Email", new {Email = email})
+                .FirstOrDefault();
         }
     }
 }
