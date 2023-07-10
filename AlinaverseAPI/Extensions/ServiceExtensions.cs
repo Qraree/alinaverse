@@ -1,5 +1,7 @@
 ﻿using System.Text;
+using Entities.ConfigurationModels;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
@@ -16,7 +18,7 @@ public static class ServiceExtensions
                     .AllowAnyHeader());
         });
 
-    public static void ConfigureJWT(this IServiceCollection services) =>
+    public static void ConfigureJWT(this IServiceCollection services, IConfiguration configuration) =>
         services.AddAuthentication(opt =>
             {
                 opt.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -24,17 +26,21 @@ public static class ServiceExtensions
             })
             .AddJwtBearer(options =>
             {
+                var jwtConfiguration = new JwtConfiguration();
+                configuration.Bind("JwtSettings", jwtConfiguration);
                 options.TokenValidationParameters = new TokenValidationParameters()
                 {
-                    ValidateIssuer = false,
-                    ValidateAudience = false,
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
                     ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero,
                     ValidateIssuerSigningKey = true,
-                    ValidIssuer = "Alinaverse",
-                    ValidAudience = "https://localhost:7023",
+                    ValidIssuer = jwtConfiguration.ValidIssuer,
+                    ValidAudience = jwtConfiguration.ValidAudience,
                     IssuerSigningKey =
-                        new SymmetricSecurityKey(Encoding.UTF8.GetBytes("3ZcRUst4DM9M24kree5uupQyLmL6pRARw7xxuPAtH"))
+                        new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtConfiguration.SecretKey))
                 };
+                options.SaveToken = true;
             });
 
     public static void ConfigureSwagger(this IServiceCollection services) =>

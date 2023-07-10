@@ -4,8 +4,10 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Contracts;
+using Entities.ConfigurationModels;
 using Entities.Exceptions;
 using Entities.Models;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Shared.DataTransferObjects;
 
@@ -15,12 +17,15 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly ITokenRepository _tokenRepository;
+    private readonly JwtConfiguration _jwtConfiguration;
     private User _user;
 
-    public AuthService(IUserRepository userRepository, ITokenRepository tokenRepository)
+    public AuthService(IUserRepository userRepository, 
+        ITokenRepository tokenRepository, IOptions<JwtConfiguration> configuration)
     {
         _userRepository = userRepository;
         _tokenRepository = tokenRepository;
+        _jwtConfiguration = configuration.Value;
     }
 
     private string HashPassword(string password)
@@ -81,7 +86,7 @@ public class AuthService : IAuthService
 
     public TokenDto CreateToken()
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("3ZcRUst4DM9M24kree5uupQyLmL6pRARw7xxuPAtH"));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtConfiguration.SecretKey));
         var signInCred = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
 
         var claims = GetClaims();
@@ -93,7 +98,7 @@ public class AuthService : IAuthService
         {
             UserId = _user.Id,
             RefreshToken = refreshToken,
-            ExpiryTime = DateTime.Now.AddDays(7)
+            ExpiryTime = DateTime.Now.AddDays(_jwtConfiguration.RefreshTokenLifeSpan)
         };
         
         _tokenRepository.SetUpRefreshToken(newToken);
@@ -140,13 +145,13 @@ public class AuthService : IAuthService
     {
         var tokenValidationParameters = new TokenValidationParameters()
         {
-            ValidateIssuer = false,
-            ValidateAudience = false,
+            ValidateIssuer = true,
+            ValidateAudience = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = "Alinaverse",
-            ValidAudience = "https://localhost:7023",
+            ValidIssuer = _jwtConfiguration.ValidIssuer,
+            ValidAudience = _jwtConfiguration.ValidAudience,
             IssuerSigningKey =
-                new SymmetricSecurityKey(Encoding.UTF8.GetBytes("3ZcRUst4DM9M24kree5uupQyLmL6pRARw7xxuPAtH"))
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtConfiguration.SecretKey))
         };
 
         var tokenHandler = new JwtSecurityTokenHandler();
@@ -167,10 +172,10 @@ public class AuthService : IAuthService
     {
         var tokenOptions = new JwtSecurityToken
         (
-            issuer: "Alinaverse",
-            audience: "https://localhost:7023",
+            issuer: _jwtConfiguration.ValidIssuer,
+            audience: _jwtConfiguration.ValidAudience,
             claims: claims,
-            expires: DateTime.Now.AddMinutes(1),
+            expires: DateTime.Now.AddMinutes(_jwtConfiguration.LifeSpan),
             signingCredentials: signingCredentials
         );
         return tokenOptions;

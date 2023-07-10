@@ -26,7 +26,7 @@ public class AuthController : ControllerBase
             new CookieOptions()
             {
                 HttpOnly = true,
-                Expires = DateTime.Now.AddDays(7),
+                Expires = DateTime.Now.AddDays(30),
                 SameSite = SameSiteMode.None,
                 Secure = true
             });
@@ -45,7 +45,7 @@ public class AuthController : ControllerBase
             new CookieOptions()
             {
                 HttpOnly = true,
-                Expires = DateTime.Now.AddDays(7),
+                Expires = DateTime.Now.AddDays(30),
                 SameSite = SameSiteMode.None,
                 Secure = true
             });
@@ -53,16 +53,19 @@ public class AuthController : ControllerBase
         return Ok(new {AccessToken = tokenDtoResult.AccessToken});
     }
 
-    [HttpPost("refresh")]
-    public IActionResult Refresh(TokenDto tokenDto)
+    [HttpGet("refresh")]
+    public IActionResult Refresh()
     {
-        var tokenDtoResult = _authService.RefreshToken(tokenDto);
+        var token = Request.Headers["Authorization"].ToString().Substring("Bearer ".Length);;
+        var refreshToken = HttpContext.Request.Cookies["refreshToken"];
+        
+        var tokenDtoResult = _authService.RefreshToken(new TokenDto(token, refreshToken));
         
         HttpContext.Response.Cookies.Append("refreshToken", tokenDtoResult.RefreshToken,
             new CookieOptions()
             {
                 HttpOnly = true,
-                Expires = DateTime.Now.AddDays(7),
+                Expires = DateTime.Now.AddDays(30),
                 SameSite = SameSiteMode.None,
                 Secure = true
             });
