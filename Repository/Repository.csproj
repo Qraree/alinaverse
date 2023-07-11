@@ -9,12 +9,19 @@
     <ItemGroup>
       <ProjectReference Include="..\Contracts\Contracts.csproj" />
       <ProjectReference Include="..\Entities\Entities.csproj" />
+      <ProjectReference Include="..\Shared\Shared.csproj" />
     </ItemGroup>
 
     <ItemGroup>
       <PackageReference Include="Dapper" Version="2.0.143" />
       <PackageReference Include="Microsoft.Extensions.Configuration" Version="7.0.0" />
       <PackageReference Include="Npgsql" Version="7.0.4" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Reference Include="Microsoft.Extensions.Options">
+        <HintPath>..\..\..\..\..\Program Files\dotnet\shared\Microsoft.AspNetCore.App\6.0.5\Microsoft.Extensions.Options.dll</HintPath>
+      </Reference>
     </ItemGroup>
 
 </Project>

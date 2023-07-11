@@ -2,6 +2,6 @@
 
 namespace Shared.DataTransferObjects;
 
-public record UserForAuthenticationServiceDto(
+public record UserForAuthenticationDto(
     [EmailAddress] string Email, 
     [MinLength(8)] string Password);

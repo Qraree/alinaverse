@@ -4,8 +4,10 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Contracts;
+using Entities.ConfigurationModels;
 using Entities.Exceptions;
 using Entities.Models;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Shared.DataTransferObjects;
 
@@ -15,12 +17,15 @@ public class AuthService : IAuthService
 {
     private readonly IUserRepository _userRepository;
     private readonly ITokenRepository _tokenRepository;
+    private readonly JwtConfiguration _jwtConfiguration;
     private User _user;
 
-    public AuthService(IUserRepository userRepository, ITokenRepository tokenRepository)
+    public AuthService(IUserRepository userRepository, 
+        ITokenRepository tokenRepository, IOptions<JwtConfiguration> configuration)
     {
         _userRepository = userRepository;
         _tokenRepository = tokenRepository;
+        _jwtConfiguration = configuration.Value;
     }
 
     private string HashPassword(string password)
@@ -71,7 +76,7 @@ public class AuthService : IAuthService
         return new UserDto(userId, userForRegistration.Name, userForRegistration.Email);
     }
 
-    public bool ValidateUser(UserForAuthenticationServiceDto userForAuth)
+    public bool ValidateUser(UserForAuthenticationDto userForAuth)
     {
         _user = _userRepository.FindUserByEmail(userForAuth.Email);
         if (this._user is null)
@@ -81,27 +86,96 @@ public class AuthService : IAuthService
 
     public TokenDto CreateToken()
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("3ZcRUst4DM9M24kree5uupQyLmL6pRARw7xxuPAtH"));
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtConfiguration.SecretKey));
         var signInCred = new SigningCredentials(key, SecurityAlgorithms.HmacSha256Signature);
 
         var claims = GetClaims();
         var tokenOptions = GenerateTokenOptions(signInCred, claims);
 
         var refreshToken = GenerateRefreshToken();
-        _tokenRepository.SetUpRefreshToken(_user.Id, refreshToken, DateTime.Now.AddDays(7));
+
+        var newToken = new Token()
+        {
+            UserId = _user.Id,
+            RefreshToken = refreshToken,
+            ExpiryTime = DateTime.Now.AddDays(_jwtConfiguration.RefreshTokenLifeSpan)
+        };
+        
+        _tokenRepository.SetUpRefreshToken(newToken);
         
         var accessToken = new JwtSecurityTokenHandler().WriteToken(tokenOptions);
         return new TokenDto(accessToken, refreshToken);
+    }
+
+    public TokenDto RefreshToken(TokenDto tokenDto)
+    {
+        var principal = GetPrincipalFromExpiredToken(tokenDto.AccessToken);
+
+        var user = _userRepository.FindUserByEmail(principal.FindFirst(ClaimTypes.Email).Value);
+        if (user == null)
+            throw new RefreshTokenBadRequest();
+
+        var refreshToken = _tokenRepository.GetRefreshToken(user.Id, tokenDto.RefreshToken);
+        if (refreshToken == null || refreshToken.ExpiryTime <= DateTime.Now)
+            throw new RefreshTokenBadRequest();
+        
+        _tokenRepository.DeleteRefreshToken(refreshToken.Id);
+        
+        _user = user;
+        
+        return CreateToken();
+    }
+
+    public void LogOut(TokenDto tokenDto)
+    {
+        var principal = GetPrincipalFromExpiredToken(tokenDto.AccessToken);
+
+        var user = _userRepository.FindUserByEmail(principal.FindFirst(ClaimTypes.Email).Value);
+        if (user == null)
+            throw new RefreshTokenBadRequest();
+
+        var refreshToken = _tokenRepository.GetRefreshToken(user.Id, tokenDto.RefreshToken);
+        if (refreshToken == null || refreshToken.ExpiryTime <= DateTime.Now)
+            throw new RefreshTokenBadRequest();
+        
+        _tokenRepository.DeleteRefreshToken(refreshToken.Id);
+    }
+
+    private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
+    {
+        var tokenValidationParameters = new TokenValidationParameters()
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = _jwtConfiguration.ValidIssuer,
+            ValidAudience = _jwtConfiguration.ValidAudience,
+            IssuerSigningKey =
+                new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtConfiguration.SecretKey))
+        };
+
+        var tokenHandler = new JwtSecurityTokenHandler();
+        SecurityToken securityToken;
+        var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out securityToken);
+        var jwtSecurityToken = securityToken as JwtSecurityToken;
+        if (jwtSecurityToken == null ||
+            !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256Signature,
+                StringComparison.InvariantCultureIgnoreCase))
+        {
+            throw new SecurityTokenException("Invalid token");
+        }
+
+        return principal;
     }
 
     private JwtSecurityToken GenerateTokenOptions(SigningCredentials signingCredentials, List<Claim> claims)
     {
         var tokenOptions = new JwtSecurityToken
         (
-            issuer: "Alinaverse",
-            audience: "https://localhost:7023",
+            issuer: _jwtConfiguration.ValidIssuer,
+            audience: _jwtConfiguration.ValidAudience,
             claims: claims,
-            expires: DateTime.Now.AddMinutes(30),
+            expires: DateTime.Now.AddMinutes(_jwtConfiguration.LifeSpan),
             signingCredentials: signingCredentials
         );
         return tokenOptions;
