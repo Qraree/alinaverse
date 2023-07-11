@@ -147,6 +147,7 @@ public class AuthService : IAuthService
         {
             ValidateIssuer = true,
             ValidateAudience = true,
+            ValidateLifetime = false,
             ValidateIssuerSigningKey = true,
             ValidIssuer = _jwtConfiguration.ValidIssuer,
             ValidAudience = _jwtConfiguration.ValidAudience,
